@@ -84,7 +84,7 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming.value = true
     currentSources.value = []
 
-    const API = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8000`
+    const API = import.meta.env.VITE_API_URL || ''
 
     try {
       const response = await fetch(`${API}/api/chat/stream`, {
