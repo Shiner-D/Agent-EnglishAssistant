@@ -20,6 +20,7 @@
         <el-menu-item index="/vocabulary">生词本</el-menu-item>
         <el-menu-item index="/review">智能复习</el-menu-item>
         <el-menu-item index="/exercise">智能练习</el-menu-item>
+        <el-menu-item index="/wordbook">单词书</el-menu-item>
         <el-menu-item index="/dashboard">Dashboard</el-menu-item>
         <div class="nav-spacer" />
         <div class="nav-user">
@@ -69,7 +70,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from './stores/user'
-import { ChatDotRound, Collection, Tickets, EditPen, DataAnalysis } from '@element-plus/icons-vue'
+import { ChatDotRound, Collection, Tickets, EditPen, DataAnalysis, Reading } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const route = useRoute()
@@ -80,6 +81,7 @@ const activeRoute = computed(() => route.path)
 
 const navTabs = [
   { path: '/tutor', label: 'AI 对话', icon: ChatDotRound },
+  { path: '/wordbook', label: '单词书', icon: Reading },
   { path: '/vocabulary', label: '生词本', icon: Collection },
   { path: '/review', label: '复习', icon: Tickets },
   { path: '/exercise', label: '练习', icon: EditPen },

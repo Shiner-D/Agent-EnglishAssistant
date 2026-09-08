@@ -338,3 +338,230 @@ New-NetFirewallRule -DisplayName "uvicorn 8000" -Direction Inbound -Protocol TCP
 ```
 
 ---
+
+## Q4: 生产环境部署到腾讯云轻量服务器（2核4G）的系列问题
+
+- 日期: 2026-08-26
+- 涉及文件: `backend/app/rag/embedder.py` · `backend/app/rag/reranker.py` · `backend/app/main.py` · `backend/Dockerfile` · `frontend/Dockerfile` · `docker-compose.yml` · `frontend/src/api/index.ts` · `frontend/src/stores/chat.ts`
+
+---
+
+### Q4-1: 服务器内存不足，本地 AI 模型无法加载
+
+**现象**：2核4G 服务器启动时加载 BGE-M3（~1.2GB）+ reranker（~600MB），合计约 2GB，加上 OS 和应用后内存不足。
+
+**根本原因**：`embedder.py` 和 `reranker.py` 虽然 config 中已预留 API 模式配置项（`EMBEDDING_API_KEY`、`EMBEDDING_BASE_URL`），但代码始终走本地加载路径，未实现 API 分支。
+
+**解决方案**：
+
+#### Fix 1 — embedder 支持 API 模式 (`backend/app/rag/embedder.py`)
+
+有 `EMBEDDING_API_KEY` 时走 OpenAI-compatible API（如 SiliconFlow 免费托管 BGE-M3），否则加载本地模型：
+
+```python
+@property
+def _use_api(self) -> bool:
+    return bool(settings.EMBEDDING_API_KEY and settings.EMBEDDING_BASE_URL)
+
+def _embed_via_api(self, texts):
+    url = settings.EMBEDDING_BASE_URL.rstrip("/") + "/embeddings"
+    headers = {"Authorization": f"Bearer {settings.EMBEDDING_API_KEY}"}
+    payload = {"model": settings.EMBEDDING_MODEL, "input": texts}
+    with httpx.Client(timeout=60) as client:
+        resp = client.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+    data = resp.json()["data"]
+    data.sort(key=lambda x: x["index"])
+    return [item["embedding"] for item in data]
+```
+
+#### Fix 2 — reranker 支持禁用 (`backend/app/rag/reranker.py`)
+
+`RERANKER_MODEL` 为空时跳过加载，`rerank()` 直接返回原始排序结果：
+
+```python
+@property
+def _enabled(self) -> bool:
+    return bool(settings.RERANKER_MODEL)
+
+def rerank(self, query, docs, top_k=5):
+    if not self._enabled or self._model is None:
+        return docs[:top_k]
+    ...
+```
+
+#### Fix 3 — main.py 按模式选择性预加载
+
+```python
+if embedding_service._use_api:
+    logger.info(f"Embedding: API mode ({settings.EMBEDDING_BASE_URL})")
+else:
+    embedding_service._load_local_model()
+if reranker._enabled:
+    reranker._load_model()
+else:
+    logger.info("Reranker: disabled.")
+```
+
+#### 服务器 `.env` 配置（根目录，供 docker-compose 读取）
+
+```env
+LLM_API_KEY=你的DeepSeek密钥
+EMBEDDING_API_KEY=你的SiliconFlow密钥
+EMBEDDING_BASE_URL=https://api.siliconflow.cn/v1
+EMBEDDING_MODEL=BAAI/bge-m3
+RERANKER_MODEL=
+```
+
+**内存对比**：
+
+| | 改造前 | 改造后 |
+| -- | -- | -- |
+| BGE-M3 | ~1.2GB | 0（云端） |
+| Reranker | ~600MB | 0（关闭） |
+| 合计 | ~2.2GB | ~400MB |
+
+> SiliconFlow 注册地址：siliconflow.cn，免费额度足够个人使用。
+
+---
+
+### Q4-2: Docker 构建时 pip 安装失败
+
+**现象**：`ERROR: Could not find a version that satisfies the requirement pydantic==2.9.2 (from versions: none)`
+
+**根本原因**：服务器（国内）访问 PyPI 超时或被限速，`from versions: none` 说明完全连不上。
+
+**解决方案**：在 `backend/Dockerfile` 中改用清华镜像源：
+
+```dockerfile
+RUN pip install --no-cache-dir -r requirements.txt \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+前端 npm 同理，在 `frontend/Dockerfile` 中：
+
+```dockerfile
+RUN npm ci --registry=https://registry.npmmirror.com
+```
+
+---
+
+### Q4-3: 前端容器启动失败，端口 80 被占用
+
+**现象**：`failed to bind host port 0.0.0.0:80/tcp: address already in use`
+
+**根本原因**：服务器已有其他进程（如系统 nginx）占用 80 端口。
+
+**解决方案**：将 `docker-compose.yml` 前端端口改为 8080：
+
+```yaml
+ports:
+  - "8080:80"
+```
+
+同时在腾讯云轻量服务器**防火墙**中添加 TCP:8080 入站规则（轻量服务器防火墙与云服务器安全组入口不同，在实例详情页的「防火墙」标签下配置）。
+
+---
+
+### Q4-4: 服务器未创建 .env 文件，LLM_API_KEY 未设置并尝试从 HuggingFace 下载模型
+
+**现象**：
+
+```text
+WARN: The "LLM_API_KEY" variable is not set. Defaulting to a blank string.
+Failed to establish connection to huggingface.co: [Errno 101] Network is unreachable
+```
+
+**根本原因**：docker-compose 从**根目录** `.env` 读取变量，但服务器上未创建该文件。同时 HuggingFace 在国内不可访问。
+
+**解决方案**：在服务器 docker-compose.yml 同目录下创建 `.env`（见 Q4-1 配置示例）。
+
+> **注意**：`backend/.env` 是本地开发用的，服务器上 docker-compose 读的是根目录 `.env`，两者互不干扰。
+
+---
+
+### Q4-5: 前端 API 请求直接打 :8000 端口，产生 Mixed Content 警告
+
+**现象**：HTTPS 页面下点击按钮报 `Network Error`，浏览器安全提示"连接不安全"，API 请求打到 `http://IP:8000`。
+
+**根本原因**：`api/index.ts` 和 `stores/chat.ts` 两处 fallback URL 均硬编码为 `http://${window.location.hostname}:8000`，绕过了 nginx 代理，在 HTTPS 页面下触发 Mixed Content 拦截。
+
+**解决方案**：两处均改为空字符串，让请求走相对路径经 nginx 代理：
+
+```typescript
+// api/index.ts 和 stores/chat.ts
+const BASE_URL = import.meta.env.VITE_API_URL || ''
+```
+
+请求路径变为 `/api/...`，由 nginx 代理到后端，浏览器只看到同源 HTTPS 请求。
+
+---
+
+### Q4-6: HTTPS 证书申请失败（.cn 域名 DNSSEC 链路问题）
+
+**现象**：
+
+```text
+DNSSEC: DNSKEY Missing: validation failure
+DNS problem: query timed out looking up A for xxx.cn
+```
+
+**根本原因**：`.cn` 顶级域在 Let's Encrypt 境外解析器上存在 DNSSEC 链路问题，与用户是否主动开启 DNSSEC 无关。DNSPod 免费版无法修复，升级付费也无必要。
+
+**解决方案**：将域名 DNS 迁移到 Cloudflare（免费）：
+
+1. 注册 Cloudflare → Add a Site → 自动导入现有 DNS 记录
+2. 获取 Cloudflare NS 地址，在腾讯云域名注册控制台修改 NS 服务器
+3. 在 Cloudflare 手动添加子域名 A 记录，**Proxy status 选「DNS only」（灰色云朵）**
+4. NS 生效后重新运行 `sudo certbot --nginx -d your.domain.cn`
+
+#### nginx 手动配置 HTTPS（certbot 自动安装失败时）
+
+```nginx
+server {
+    listen 80;
+    server_name english.yourdomain.cn;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name english.yourdomain.cn;
+
+    ssl_certificate /etc/letsencrypt/live/english.yourdomain.cn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/english.yourdomain.cn/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8080/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection '';
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/english-tutor /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+---
+
+### Q4 注意事项
+
+- **本地 vs 生产配置分离**：本地用 `backend/.env`（reranker 开启，本地模型），服务器用根目录 `.env`（API 模式，reranker 关闭），docker-compose `environment:` 覆盖容器内文件，两套互不干扰
+- **uvicorn workers 必须为 1**：有本地模型时多 worker 会重复加载导致 OOM
+- **轻量服务器防火墙**：入口在实例详情页「防火墙」标签，不同于云服务器的「安全组」
+- **Chrome 缓存**：切换 HTTP→HTTPS 后 Chrome 可能缓存旧警告，F12 开发者工具 → 右键刷新 → 「清空缓存并硬性重新加载」
+
+---

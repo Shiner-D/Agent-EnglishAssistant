@@ -9,6 +9,12 @@ from app.models.schemas import UserCreate, UserUpdate, UserOut
 router = APIRouter()
 
 
+@router.get("/", response_model=list[UserOut])
+async def list_users(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User))
+    return [UserOut.model_validate(u) for u in result.scalars().all()]
+
+
 @router.post("/", response_model=UserOut)
 async def create_user(data: UserCreate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.username == data.username))

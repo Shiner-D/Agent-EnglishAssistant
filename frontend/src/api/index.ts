@@ -58,6 +58,30 @@ export const getDashboard = (userId: number) =>
 export const getTTSUrl = (text: string, voice = 'en-US') =>
   `${BASE_URL}/api/tts/speak?text=${encodeURIComponent(text)}&voice=${voice}`
 
+// Wordbook
+export const getWordbookLevels = () =>
+  api.get('/api/wordbook/levels')
+
+export const getWordbookWords = (levelId: number, page = 1, pageSize = 20) =>
+  api.get(`/api/wordbook/levels/${levelId}/words`, { params: { page, page_size: pageSize } })
+
+export const getWordbookProgress = (userId: number) =>
+  api.get(`/api/wordbook/progress/${userId}`)
+
+export const updateWordbookProgress = (userId: number, wordId: number, status: string) =>
+  api.post(`/api/wordbook/progress/${userId}/${wordId}`, { status })
+
+export const getStudyWords = (userId: number, levelId: number, limit = 20) =>
+  api.get(`/api/wordbook/study/${userId}/${levelId}`, { params: { limit } })
+
+export const uploadWordImage = (wordId: number, file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post(`/api/wordbook/words/${wordId}/image`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
 // STT
 export const transcribeAudio = (blob: Blob): Promise<{ transcript: string }> => {
   const form = new FormData()

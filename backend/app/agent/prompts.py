@@ -1,3 +1,9 @@
+"""Agent 所用的 Prompt 模板。
+
+每个模板对应一类意图的处理逻辑，通过 .format() 在运行时填入变量。
+"""
+
+# 全局系统提示：注入所有对话请求，约束 AI 行为（禁止捏造词典信息、保持鼓励语气）
 SYSTEM_PROMPT = """You are an expert English tutor AI assistant. You help users learn English effectively.
 
 Rules:
@@ -9,6 +15,7 @@ Rules:
 - When explaining words, use the user's native language (Chinese) where helpful.
 - Adapt difficulty to the user's level."""
 
+# 意图分类 Prompt：要求模型只返回意图标签字符串，不允许输出其他内容
 INTENT_PROMPT = """Classify the user's message into one of these intents:
 - WORD_LOOKUP: User asks about word meaning, usage, pronunciation, examples
 - EXERCISE: User wants to practice, take a quiz, or be tested
@@ -24,6 +31,7 @@ User message: {message}
 
 Reply with ONLY the intent label (one of the above), nothing else."""
 
+# 词义查询 Prompt：必须基于 RAG 知识库，禁止臆造词典信息；context 由 rag_retrieval_node 注入
 WORD_LOOKUP_PROMPT = """You are an English tutor. Based on the following dictionary knowledge, explain the word to the user.
 
 Knowledge Base Context:
@@ -41,6 +49,7 @@ Provide a clear, helpful explanation including:
 
 Keep your response concise and educational."""
 
+# 练习题生成 Prompt：要求以 JSON 格式输出题目、选项、答案及解析
 EXERCISE_PROMPT = """Generate an English exercise for the user.
 
 User vocabulary words:
@@ -62,6 +71,7 @@ Format as JSON:
   "explanation": "..."
 }}"""
 
+# 翻译 Prompt：支持中英互译，附带语体说明和替代表达
 TRANSLATE_PROMPT = """You are an English tutor helping with translation.
 
 User request: {message}
@@ -71,6 +81,7 @@ Provide accurate translation. If translating Chinese to English, also note:
 - Alternative expressions
 - Any important grammar notes"""
 
+# 改写 Prompt：对原文进行难度调整或语法修正，并逐条说明改动原因
 REWRITE_PROMPT = """You are an English writing coach.
 
 Original text: {text}

@@ -26,7 +26,7 @@
             <el-icon class="tts-icon" @click="speak(uw.word.word)"><Microphone /></el-icon>
           </div>
 
-          <div class="phonetic" v-if="uw.word.phonetic">{{ uw.word.phonetic }}</div>
+          <div class="phonetic" v-if="uw.word.phonetic">/{{ uw.word.phonetic }}/</div>
 
           <div class="translation">{{ uw.word.translation || uw.word.definition }}</div>
 
@@ -69,7 +69,7 @@
 import { ref, onMounted } from 'vue'
 import { Search, Microphone } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { getVocabulary, removeWord as apiRemoveWord, getTTSUrl } from '../api'
+import { getVocabulary, removeWord as apiRemoveWord } from '../api'
 import { useUserStore } from '../stores/user'
 
 const userStore = useUserStore()
@@ -94,7 +94,15 @@ async function removeWord(word: string) {
 }
 
 function speak(word: string) {
-  new Audio(getTTSUrl(word)).play()
+  if (!window.speechSynthesis) {
+    ElMessage.error('浏览器不支持语音合成')
+    return
+  }
+  window.speechSynthesis.cancel()
+  const utterance = new SpeechSynthesisUtterance(word)
+  utterance.lang = 'en-US'
+  utterance.rate = 0.9
+  window.speechSynthesis.speak(utterance)
 }
 
 function masteryColor(score: number): string {

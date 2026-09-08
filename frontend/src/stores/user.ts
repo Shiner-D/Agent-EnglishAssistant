@@ -22,9 +22,18 @@ export const useUserStore = defineStore('user', () => {
 
   async function loadProfile() {
     if (!userId.value) return
-    const res = await getUser(userId.value)
-    level.value = res.data.level
-    target.value = res.data.target
+    try {
+      const res = await getUser(userId.value)
+      level.value = res.data.level
+      target.value = res.data.target
+    } catch (e: any) {
+      if (e?.response?.status === 404) {
+        userId.value = 0
+        username.value = ''
+        localStorage.removeItem('userId')
+        localStorage.removeItem('username')
+      }
+    }
   }
 
   return { userId, username, level, target, isLoggedIn, login, loadProfile }

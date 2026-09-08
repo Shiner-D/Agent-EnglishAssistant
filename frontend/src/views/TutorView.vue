@@ -63,7 +63,7 @@
               <div v-for="(src, si) in msg.sources" :key="si" class="source-card">
                 <div class="source-word">
                   {{ src.word }}
-                  <span v-if="src.phonetic" class="phonetic">{{ src.phonetic }}</span>
+                  <span v-if="src.phonetic" class="phonetic">/{{ src.phonetic }}/</span>
                   <el-icon class="tts-btn" @click="playTTS(src.word)"><Microphone /></el-icon>
                 </div>
                 <div v-if="src.translation" class="source-def">{{ src.translation }}</div>

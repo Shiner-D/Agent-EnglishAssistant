@@ -19,7 +19,7 @@
         <div class="card-front">
           <div class="word-big">{{ currentWord.word.word }}</div>
           <div class="phonetic" v-if="currentWord.word.phonetic">
-            {{ currentWord.word.phonetic }}
+            /{{ currentWord.word.phonetic }}/
             <el-icon @click="speak(currentWord.word.word)" class="tts-btn"><Microphone /></el-icon>
           </div>
 

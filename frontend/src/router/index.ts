@@ -32,6 +32,11 @@ const router = createRouter({
       name: 'dashboard',
       component: () => import('../views/DashboardView.vue'),
     },
+    {
+      path: '/wordbook',
+      name: 'wordbook',
+      component: () => import('../views/WordbookView.vue'),
+    },
   ],
 })
 

@@ -154,3 +154,44 @@ class RAGResult(BaseModel):
     query: str
     docs: list[RetrievedDoc]
     answer: str | None = None
+
+
+# --- Wordbook ---
+class WordbookLevelOut(BaseModel):
+    id: int
+    name: str
+    description: str
+    sort_order: int
+    word_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class WordbookWordOut(BaseModel):
+    id: int
+    word: str
+    level_id: int
+    phonetic: str | None
+    pos: str | None
+    definition: str | None
+    mnemonic: str | None
+    example: str | None
+    example_translation: str | None
+    image_path: str | None
+    sort_order: int
+
+    class Config:
+        from_attributes = True
+
+
+class UserWordbookProgressUpdate(BaseModel):
+    status: str  # "unlearned" | "learning" | "mastered"
+
+
+class StudyProgressSummary(BaseModel):
+    level_id: int
+    level_name: str
+    total: int
+    learned: int
+    mastered: int

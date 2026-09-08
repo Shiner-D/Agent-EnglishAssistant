@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import (
     String, Integer, Float, Boolean, Text, DateTime,
-    ForeignKey, JSON
+    ForeignKey, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.database import Base
@@ -22,6 +22,7 @@ class User(Base):
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="user")
     user_words: Mapped[list["UserWord"]] = relationship(back_populates="user")
     exercises: Mapped[list["Exercise"]] = relationship(back_populates="user")
+    wordbook_progress: Mapped[list["UserWordbookProgress"]] = relationship(back_populates="user")
 
 
 class Conversation(Base):
@@ -102,3 +103,49 @@ class Exercise(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship(back_populates="exercises")
+
+
+class WordbookLevel(Base):
+    __tablename__ = "wordbook_levels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    description: Mapped[str] = mapped_column(String(100), default="")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    word_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    words: Mapped[list["WordbookWord"]] = relationship(back_populates="level")
+
+
+class WordbookWord(Base):
+    __tablename__ = "wordbook_words"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    word: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    level_id: Mapped[int] = mapped_column(Integer, ForeignKey("wordbook_levels.id"), nullable=False)
+    phonetic: Mapped[str | None] = mapped_column(String(100))
+    pos: Mapped[str | None] = mapped_column(String(50))
+    definition: Mapped[str | None] = mapped_column(String(500))
+    mnemonic: Mapped[str | None] = mapped_column(Text)
+    example: Mapped[str | None] = mapped_column(String(500))
+    example_translation: Mapped[str | None] = mapped_column(String(500))
+    image_path: Mapped[str | None] = mapped_column(String(255))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    level: Mapped["WordbookLevel"] = relationship(back_populates="words")
+    progress_records: Mapped[list["UserWordbookProgress"]] = relationship(back_populates="word")
+
+
+class UserWordbookProgress(Base):
+    __tablename__ = "user_wordbook_progress"
+    __table_args__ = (UniqueConstraint("user_id", "word_id", name="uq_user_wordbook"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    word_id: Mapped[int] = mapped_column(Integer, ForeignKey("wordbook_words.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="unlearned")
+    learned_at: Mapped[datetime | None] = mapped_column(DateTime)
+    mastered_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    user: Mapped["User"] = relationship(back_populates="wordbook_progress")
+    word: Mapped["WordbookWord"] = relationship(back_populates="progress_records")

@@ -2,13 +2,14 @@ from contextlib import asynccontextmanager
 import sys
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 import httpx
 
 from app.core.config import settings
 from app.core.exceptions import http_exception_handler, general_exception_handler, llm_timeout_handler
 from app.models.database import init_db, engine
-from app.api import chat, users, words, exercises, tts, dashboard, stt
+from app.api import chat, users, words, exercises, tts, dashboard, stt, wordbook
 from app.rag.embedder import embedding_service
 from app.rag.reranker import reranker
 
@@ -84,6 +85,11 @@ app.include_router(exercises.router, prefix="/api/exercises", tags=["Exercises"]
 app.include_router(tts.router, prefix="/api/tts", tags=["TTS"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(stt.router, prefix="/api/stt", tags=["STT"])
+app.include_router(wordbook.router, prefix="/api/wordbook", tags=["Wordbook"])
+
+import os as _os
+_os.makedirs("data/wordbook_images", exist_ok=True)
+app.mount("/static/wordbook_images", StaticFiles(directory="data/wordbook_images"), name="static_wordbook")
 
 
 @app.get("/health")

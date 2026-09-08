@@ -15,6 +15,11 @@ from app.core.config import settings
 
 
 def _get_last_user_message(state: AgentState) -> str:
+    """返回消息列表中最后一条用户消息的文本。
+
+    同时兼容 LangChain Message 对象（.type == 'human'）
+    和原始 dict 格式（{'role': 'user', ...}）。
+    """
     for msg in reversed(state["messages"]):
         if hasattr(msg, "type") and msg.type == "human":
             return msg.content
@@ -24,6 +29,10 @@ def _get_last_user_message(state: AgentState) -> str:
 
 
 def _get_history_text(state: AgentState, max_turns: int = 5) -> str:
+    """将最近 max_turns 轮对话格式化为纯文本，供意图分类 Prompt 使用。
+
+    取最后 max_turns * 2 条消息（每轮含用户+助手各一条）。
+    """
     messages = state["messages"][-max_turns * 2:]
     lines = []
     for msg in messages:
@@ -106,7 +115,7 @@ async def word_lookup_node(state: AgentState) -> AgentState:
 async def exercise_node(state: AgentState) -> AgentState:
     """Generate exercise based on user vocabulary."""
     user_msg = _get_last_user_message(state)
-    user_words_text = "persist, insist, persevere"  # placeholder; replaced by tool call
+    user_words_text = "persist, insist, persevere"  # TODO: 替换为从数据库查询用户真实词汇表
     prompt = EXERCISE_PROMPT.format(
         words=user_words_text,
         exercise_type="multiple_choice",
