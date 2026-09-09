@@ -91,7 +91,7 @@
     <!-- Load more -->
     <div v-if="store.hasMore && store.words.length > 0" class="load-more">
       <el-button @click="loadMore" :loading="store.loading" plain>加载更多</el-button>
-      <el-button @click="testError">测试错误</el-button>
+      <!-- <el-button @click="testError">测试错误</el-button> -->
     </div>
   </div>
 </template>
@@ -162,9 +162,9 @@ async function loadMore() {
   await store.loadWords(store.currentLevelId, store.currentPage + 1)
 }
 
-function testError() {
-  throw new Error('This is a test error for Sentry.')
-}
+// function testError() {
+//   throw new Error('This is a test error for Sentry.')
+// }
 
 function speak(word: string) {
   if (!window.speechSynthesis) {
